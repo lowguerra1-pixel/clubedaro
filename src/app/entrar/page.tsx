@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { setSession, isLoggedIn } from '@/lib/userStorage';
 
+const CHECKOUT_URL = 'https://pay.hotmart.com/U107204446L?checkoutMode=10';
+
 export default function Entrar() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -46,7 +48,19 @@ export default function Entrar() {
           {error && <div style={{ background: '#FBEAEA', border: '1px solid #F3C7C1', borderRadius: 12, padding: '10px 12px', fontSize: 12.5, color: '#B24A4A' }}>{error}</div>}
           <button type="submit" disabled={loading} style={{ height: 54, border: 'none', borderRadius: 16, background: '#6C3FB0', color: '#fff', fontWeight: 700, fontSize: 16, cursor: 'pointer', opacity: loading ? 0.6 : 1 }}>{loading ? 'Entrando…' : 'Acessar'}</button>
         </form>
-        <p style={{ textAlign: 'center', fontSize: 11.5, color: '#9B95AC', margin: '16px 0 0', lineHeight: 1.5 }}>Acesso exclusivo para assinantes do Clube.</p>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
+          <span style={{ flex: 1, height: 1, background: '#EEE9F5' }} />
+          <span style={{ fontSize: 11.5, color: '#B0A9C0', fontWeight: 600 }}>ainda não é sócia?</span>
+          <span style={{ flex: 1, height: 1, background: '#EEE9F5' }} />
+        </div>
+
+        <a href={CHECKOUT_URL} target="_blank" rel="noopener noreferrer"
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, textDecoration: 'none', height: 58, justifyContent: 'center', border: 'none', borderRadius: 16, background: '#F5806C', boxShadow: '0 12px 26px rgba(245,128,108,.34)' }}>
+          <span style={{ color: '#fff', fontWeight: 800, fontSize: 16 }}>Começar com 7 dias grátis</span>
+          <span style={{ color: '#FFEEEA', fontWeight: 600, fontSize: 11.5 }}>Plano Sócia Fundadora · R$1,23/dia</span>
+        </a>
+        <p style={{ textAlign: 'center', fontSize: 11.5, color: '#9B95AC', margin: '14px 0 0', lineHeight: 1.5 }}>Sem compromisso — cancele quando quiser.</p>
       </div>
     </main>
   );
