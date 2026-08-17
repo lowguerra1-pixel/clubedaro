@@ -1,0 +1,4 @@
+# Clube da Dra. Rô — site estático (protótipo v0)
+[build]
+  publish = "."
+  command = ""
