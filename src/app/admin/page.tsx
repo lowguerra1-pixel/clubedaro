@@ -7,9 +7,8 @@ interface Material {
   tipo: string | null; arquivo: string | null; link_externo: string | null;
   tema: string | null; rotulo: string | null; liberar_em: string; gratis: boolean; publicado: boolean;
 }
-interface Membro {
-  id: string; email: string; nome: string | null; status: string; plano: string | null; iniciou_em: string; criado_em: string;
-}
+interface Membro { id: string; email: string; nome: string | null; status: string; plano: string | null; iniciou_em: string; criado_em: string; }
+interface Tema { id: string; nome: string; inicio_em: string; }
 
 const CATEGORIAS = ['Baralhos', 'Fichas', 'Áudios & Aulas', 'Protocolos'];
 const TIPOS = ['pdf', 'audio', 'video', 'link'];
@@ -24,8 +23,9 @@ const IconMemb = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="no
 const IconOut = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14.6 4.6h3.8a1.5 1.5 0 0 1 1.5 1.5v11.8a1.5 1.5 0 0 1-1.5 1.5h-3.8"></path><path d="m9.6 8.6-3.4 3.4 3.4 3.4"></path><path d="M6.4 12h9.2"></path></svg>);
 
 function emptyForm() {
-  return { titulo: '', descricao: '', categoria: CATEGORIAS[0], tipo: 'pdf', link_externo: '', tema: '', rotulo: '', liberar_em: '', gratis: true, publicado: true };
+  return { titulo: '', descricao: '', categoria: CATEGORIAS[0], tipo: 'pdf', link_externo: '', tema_id: '', semana: '', dataManual: '', gratis: true, publicado: true };
 }
+async function safeJson(res: Response) { const t = await res.text(); try { return JSON.parse(t); } catch { return { error: t || `HTTP ${res.status}` }; } }
 
 export default function AdminClube() {
   const [pw, setPw] = useState('');
@@ -35,41 +35,70 @@ export default function AdminClube() {
   const [tab, setTab] = useState<'materiais' | 'assinantes'>('materiais');
 
   const [list, setList] = useState<Material[]>([]);
+  const [temas, setTemas] = useState<Tema[]>([]);
   const [form, setForm] = useState(emptyForm());
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
+  const [temaForm, setTemaForm] = useState({ nome: '', inicio_em: '' });
   const [membros, setMembros] = useState<Membro[]>([]);
 
   const loadMateriais = useCallback(async (p: string) => {
     const res = await fetch('/api/admin/materiais', { headers: { 'x-admin-password': p } });
     if (res.status === 401) { setLoginErr('Senha incorreta.'); setAuthed(false); localStorage.removeItem(PW_KEY); return false; }
-    const data = await res.json();
+    const data = await safeJson(res);
     setList(data.materiais ?? []);
     return true;
   }, []);
-
+  const loadTemas = useCallback(async (p: string) => {
+    const res = await fetch('/api/admin/temas', { headers: { 'x-admin-password': p } });
+    if (res.ok) { const d = await safeJson(res); setTemas(d.temas ?? []); }
+  }, []);
   const loadMembros = useCallback(async (p: string) => {
     const res = await fetch('/api/admin/membros', { headers: { 'x-admin-password': p } });
-    if (res.ok) { const d = await res.json(); setMembros(d.membros ?? []); }
+    if (res.ok) { const d = await safeJson(res); setMembros(d.membros ?? []); }
   }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem(PW_KEY);
     if (saved) {
       setPw(saved);
-      loadMateriais(saved).then(ok => { if (ok) { setAuthed(true); loadMembros(saved); } });
+      loadMateriais(saved).then(ok => { if (ok) { setAuthed(true); loadTemas(saved); loadMembros(saved); } });
     }
-  }, [loadMateriais, loadMembros]);
+  }, [loadMateriais, loadTemas, loadMembros]);
 
   const entrar = async () => {
     const p = pwInput.trim();
     if (!p) return;
     setPw(p);
     const ok = await loadMateriais(p);
-    if (ok) { localStorage.setItem(PW_KEY, p); setAuthed(true); setLoginErr(''); loadMembros(p); }
+    if (ok) { localStorage.setItem(PW_KEY, p); setAuthed(true); setLoginErr(''); loadTemas(p); loadMembros(p); }
+  };
+  const sair = () => { localStorage.removeItem(PW_KEY); setAuthed(false); setPwInput(''); };
+
+  // ─── Cálculo do agendamento por Tema + Semana ────────────────────
+  const semanaNum = /^[1-4]$/.test(form.semana) ? parseInt(form.semana) : 0;
+  const temaSel = temas.find(t => t.id === form.tema_id);
+  const dataAuto: Date | null = (temaSel && semanaNum) ? (() => {
+    const d = new Date(temaSel.inicio_em + 'T08:00:00');
+    d.setDate(d.getDate() + (semanaNum - 1) * 7);
+    return d;
+  })() : null;
+
+  const criarTema = async () => {
+    if (!temaForm.nome.trim() || !temaForm.inicio_em) { setErr('Preencha nome e data de início do tema.'); return; }
+    const res = await fetch('/api/admin/temas', { method: 'POST', headers: { 'x-admin-password': pw, 'Content-Type': 'application/json' }, body: JSON.stringify(temaForm) });
+    const d = await safeJson(res);
+    if (!res.ok) { setErr(d.error || 'Erro ao criar tema'); return; }
+    setTemaForm({ nome: '', inicio_em: '' }); setErr('');
+    loadTemas(pw);
+  };
+  const excluirTema = async (id: string) => {
+    if (!confirm('Excluir este tema? (os materiais já criados continuam)')) return;
+    await fetch(`/api/admin/temas/${id}`, { method: 'DELETE', headers: { 'x-admin-password': pw } });
+    loadTemas(pw);
   };
 
   const salvar = async () => {
@@ -79,25 +108,26 @@ export default function AdminClube() {
     try {
       let arquivo: string | null = null;
       if (file) {
-        const fd = new FormData();
-        fd.append('file', file);
-        const up = await fetch('/api/admin/upload', { method: 'POST', headers: { 'x-admin-password': pw }, body: fd });
-        const upData = await up.json();
-        if (!up.ok) throw new Error(upData.error || 'Falha no upload');
-        arquivo = upData.path;
+        const r = await fetch('/api/admin/upload-url', { method: 'POST', headers: { 'x-admin-password': pw, 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: file.name }) });
+        const ud = await safeJson(r);
+        if (!r.ok) throw new Error(ud.error || 'Erro ao preparar upload');
+        const put = await fetch(ud.signedUrl, { method: 'PUT', body: file, headers: { 'content-type': file.type || 'application/octet-stream', 'x-upsert': 'true' } });
+        if (!put.ok) throw new Error(`Falha ao enviar o arquivo (${put.status})`);
+        arquivo = ud.path;
       }
+      const liberar_em = dataAuto ? dataAuto.toISOString() : (form.dataManual ? new Date(form.dataManual).toISOString() : new Date().toISOString());
+      const rotulo = semanaNum ? `Semana ${semanaNum}` : null;
       const body = {
-        titulo: form.titulo.trim(), descricao: form.descricao || null, categoria: form.categoria,
-        tipo: form.tipo, arquivo, link_externo: form.link_externo || null, tema: form.tema || null,
-        rotulo: form.rotulo || null,
-        liberar_em: form.liberar_em ? new Date(form.liberar_em).toISOString() : new Date().toISOString(),
-        gratis: form.gratis, publicado: form.publicado,
+        titulo: form.titulo.trim(), descricao: form.descricao || null, categoria: form.categoria, tipo: form.tipo,
+        arquivo, link_externo: form.link_externo || null, tema: temaSel ? temaSel.nome : null, rotulo,
+        liberar_em, gratis: form.gratis, publicado: form.publicado,
       };
       const res = await fetch('/api/admin/materiais', { method: 'POST', headers: { 'x-admin-password': pw, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
       setMsg('Material salvo! ✓');
-      setForm(emptyForm()); setFile(null);
+      setForm(f => ({ ...emptyForm(), categoria: f.categoria, tema_id: f.tema_id })); // mantém tema/categoria pra agilizar
+      setFile(null);
       await loadMateriais(pw);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Erro');
@@ -110,10 +140,8 @@ export default function AdminClube() {
     await loadMateriais(pw);
   };
 
-  const sair = () => { localStorage.removeItem(PW_KEY); setAuthed(false); setPwInput(''); };
-
-  const fmt = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const fmtD = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const fmt = (iso: string | Date) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const fmtD = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const agendado = (iso: string) => new Date(iso).getTime() > Date.now();
 
   // ─── Login ───────────────────────────────────────────────────────
@@ -140,17 +168,11 @@ export default function AdminClube() {
     );
   };
 
-  const stats = {
-    total: membros.length,
-    trial: membros.filter(m => m.status === 'trial').length,
-    ativos: membros.filter(m => m.status === 'ativo').length,
-    cancel: membros.filter(m => m.status === 'cancelado').length,
-  };
+  const stats = { total: membros.length, trial: membros.filter(m => m.status === 'trial').length, ativos: membros.filter(m => m.status === 'ativo').length, cancel: membros.filter(m => m.status === 'cancelado').length };
 
   // ─── Dashboard ───────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', minHeight: '100dvh', background: '#F7F4FC' }}>
-      {/* Sidebar */}
       <aside style={{ width: 230, flex: 'none', background: '#2A2438', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100dvh' }}>
         <div style={{ padding: '20px 18px', borderBottom: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'center', gap: 11 }}>
           <div style={{ width: 38, height: 38, borderRadius: 11, background: 'linear-gradient(150deg,#6C3FB0,#4A2A80)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
@@ -172,32 +194,88 @@ export default function AdminClube() {
         </div>
       </aside>
 
-      {/* Conteúdo */}
       <main style={{ flex: 1, minWidth: 0, padding: '28px 26px 60px', overflowX: 'hidden' }}>
         {tab === 'materiais' && (
           <div style={{ maxWidth: 720 }}>
             <h1 className="serif" style={{ fontSize: 26, fontWeight: 700, color: '#4A2A80', margin: '0 0 4px' }}>Materiais</h1>
-            <p style={{ fontSize: 14, color: '#7C7090', margin: '0 0 22px' }}>Adicione recursos e agende a liberação (drip).</p>
+            <p style={{ fontSize: 14, color: '#7C7090', margin: '0 0 22px' }}>Crie um tema do mês, depois é só escolher a semana — o material agenda sozinho.</p>
 
+            {/* Temas do mês */}
+            <div style={{ ...CARD, marginBottom: 20 }}>
+              <div className="serif" style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Temas do mês</div>
+              <p style={{ fontSize: 12.5, color: '#7C7090', margin: '0 0 14px' }}>Ex.: “Arteterapia Junguiana”, com a data da Semana 1. As semanas seguintes agendam de 7 em 7 dias.</p>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'end', marginBottom: temas.length ? 14 : 0 }}>
+                <div style={{ flex: '1 1 220px' }}><label style={LABEL}>Nome do tema</label><input value={temaForm.nome} onChange={e => setTemaForm({ ...temaForm, nome: e.target.value })} placeholder="Arteterapia Junguiana" style={INPUT} /></div>
+                <div style={{ flex: '0 1 180px' }}><label style={LABEL}>Início (Semana 1)</label><input type="date" value={temaForm.inicio_em} onChange={e => setTemaForm({ ...temaForm, inicio_em: e.target.value })} style={INPUT} /></div>
+                <button onClick={criarTema} style={{ border: 'none', background: '#9163E0', color: '#fff', fontWeight: 700, fontSize: 14, padding: '11px 18px', borderRadius: 12, cursor: 'pointer' }}>Criar tema</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {temas.map(t => (
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#FBFAFE', border: '1px solid #EFEAF7', borderRadius: 12, padding: '9px 13px' }}>
+                    <span style={{ fontWeight: 700, fontSize: 13.5, flex: 1 }}>{t.nome}</span>
+                    <span style={{ fontSize: 12, color: '#7C7090' }}>Semana 1: {fmtD(t.inicio_em)}</span>
+                    <button onClick={() => excluirTema(t.id)} style={{ border: 'none', background: 'none', color: '#B24A4A', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>excluir</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Adicionar material */}
             <div style={{ ...CARD, marginBottom: 26 }}>
               <div className="serif" style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Adicionar material</div>
               <div style={{ display: 'grid', gap: 14 }}>
                 <div><label style={LABEL}>Título</label><input value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Ex.: Baralho Cartas do Inconsciente" style={INPUT} /></div>
                 <div><label style={LABEL}>Descrição</label><textarea value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} rows={2} placeholder="Breve descrição" style={{ ...INPUT, resize: 'vertical' }} /></div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <div><label style={LABEL}>Categoria</label><select value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })} style={INPUT}>{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                  <div><label style={LABEL}>Tipo</label><select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} style={INPUT}>{TIPOS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 14 }}>
+                  <div><label style={LABEL}>Tema do mês</label>
+                    <select value={form.tema_id} onChange={e => setForm({ ...form, tema_id: e.target.value })} style={INPUT}>
+                      <option value="">— sem tema —</option>
+                      {temas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={LABEL}>Semana</label>
+                    <select value={form.semana} onChange={e => setForm({ ...form, semana: e.target.value })} style={INPUT}>
+                      <option value="">avulso</option>
+                      <option value="1">Semana 1</option><option value="2">Semana 2</option><option value="3">Semana 3</option><option value="4">Semana 4</option>
+                    </select>
+                  </div>
+                  <div><label style={LABEL}>Categoria</label>
+                    <select value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })} style={INPUT}>{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                  </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <div><label style={LABEL}>Tema do mês</label><input value={form.tema} onChange={e => setForm({ ...form, tema: e.target.value })} placeholder="Ex.: Arteterapia Junguiana" style={INPUT} /></div>
-                  <div><label style={LABEL}>Rótulo</label><input value={form.rotulo} onChange={e => setForm({ ...form, rotulo: e.target.value })} placeholder='Ex.: "Semana 1"' style={INPUT} /></div>
+
+                {/* Agendamento */}
+                <div style={{ background: dataAuto ? '#EFEBFA' : '#FBFAFE', border: '1px solid #EAE2F6', borderRadius: 12, padding: '11px 14px' }}>
+                  {dataAuto ? (
+                    <div style={{ fontSize: 13, color: '#4A2A80' }}>📅 Será liberado automaticamente em <strong>{fmt(dataAuto)}</strong> ({temaSel?.nome} · Semana {semanaNum}).</div>
+                  ) : (
+                    <div>
+                      <label style={LABEL}>Liberar em (manual)</label>
+                      <input type="datetime-local" value={form.dataManual} onChange={e => setForm({ ...form, dataManual: e.target.value })} style={INPUT} />
+                      <div style={{ fontSize: 12, color: '#9B95AC', marginTop: 4 }}>Vazio = liberar agora. (Escolha um Tema + Semana pra agendar automático.)</div>
+                    </div>
+                  )}
                 </div>
-                <div><label style={LABEL}>Arquivo (upload)</label><input type="file" onChange={e => setFile(e.target.files?.[0] ?? null)} style={{ fontSize: 14 }} /><div style={{ fontSize: 12, color: '#9B95AC', marginTop: 4 }}>Ou use um link externo abaixo.</div></div>
+
+                {/* Arquivo */}
+                <div>
+                  <label style={LABEL}>Arquivo</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <label style={{ border: '1.5px solid #DCD2EC', background: '#F5F0FC', color: '#6C3FB0', fontWeight: 700, fontSize: 13.5, padding: '10px 16px', borderRadius: 12, cursor: 'pointer' }}>
+                      Escolher arquivo
+                      <input type="file" onChange={e => setFile(e.target.files?.[0] ?? null)} style={{ display: 'none' }} />
+                    </label>
+                    <span style={{ fontSize: 13, color: file ? '#251A38' : '#9B95AC', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file ? file.name : 'nenhum arquivo selecionado'}</span>
+                    {file && <button onClick={() => setFile(null)} style={{ border: 'none', background: 'none', color: '#B24A4A', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>remover</button>}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#9B95AC', marginTop: 5 }}>Ou use um link externo abaixo (vídeo, etc.).</div>
+                </div>
                 <div><label style={LABEL}>Link externo (opcional)</label><input value={form.link_externo} onChange={e => setForm({ ...form, link_externo: e.target.value })} placeholder="https://…" style={INPUT} /></div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 14, alignItems: 'end' }}>
-                  <div><label style={LABEL}>Liberar em (agendamento)</label><input type="datetime-local" value={form.liberar_em} onChange={e => setForm({ ...form, liberar_em: e.target.value })} style={INPUT} /><div style={{ fontSize: 12, color: '#9B95AC', marginTop: 4 }}>Vazio = agora. Futuro = agendado.</div></div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, paddingBottom: 8 }}><input type="checkbox" checked={form.gratis} onChange={e => setForm({ ...form, gratis: e.target.checked })} /> grátis</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, paddingBottom: 8 }}><input type="checkbox" checked={form.publicado} onChange={e => setForm({ ...form, publicado: e.target.checked })} /> publicado</label>
+
+                <div style={{ display: 'flex', gap: 20 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}><input type="checkbox" checked={form.gratis} onChange={e => setForm({ ...form, gratis: e.target.checked })} /> grátis</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}><input type="checkbox" checked={form.publicado} onChange={e => setForm({ ...form, publicado: e.target.checked })} /> publicado</label>
                 </div>
                 {err && <p style={{ color: '#C0392B', fontSize: 13, margin: 0 }}>{err}</p>}
                 {msg && <p style={{ color: '#1F7A50', fontSize: 13, margin: 0 }}>{msg}</p>}
@@ -232,7 +310,6 @@ export default function AdminClube() {
           <div style={{ maxWidth: 820 }}>
             <h1 className="serif" style={{ fontSize: 26, fontWeight: 700, color: '#4A2A80', margin: '0 0 4px' }}>Assinantes</h1>
             <p style={{ fontSize: 14, color: '#7C7090', margin: '0 0 22px' }}>Quem entrou no Clube (trial e pagantes).</p>
-
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 22 }}>
               {[['Total', stats.total, '#6C3FB0'], ['Em trial', stats.trial, '#C79A2E'], ['Ativos', stats.ativos, '#2FA36B'], ['Cancelados', stats.cancel, '#B24A4A']].map(([lbl, val, col]) => (
                 <div key={lbl as string} style={{ ...CARD, padding: 16 }}>
@@ -241,11 +318,10 @@ export default function AdminClube() {
                 </div>
               ))}
             </div>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {membros.length === 0 && (
                 <div style={{ ...CARD, color: '#7C7090', fontSize: 14, lineHeight: 1.6 }}>
-                  Nenhum assinante ainda. Eles vão aparecer aqui automaticamente assim que o <strong>webhook da assinatura</strong> estiver ativo (próximo passo) e alguém entrar no teste grátis.
+                  Nenhum assinante ainda. Eles vão aparecer aqui automaticamente assim que o <strong>webhook da assinatura (Hotmart)</strong> estiver ativo e alguém entrar no teste grátis.
                 </div>
               )}
               {membros.map(m => (
@@ -253,12 +329,9 @@ export default function AdminClube() {
                   <div style={{ width: 40, height: 40, borderRadius: 999, background: '#F0E8FB', color: '#6C3FB0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flex: 'none' }}>{(m.nome || m.email).charAt(0).toUpperCase()}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 14.5 }}>{m.nome || m.email.split('@')[0]}</div>
-                    <div style={{ fontSize: 12.5, color: '#7C7090' }}>{m.email} · entrou {fmtD(m.iniciou_em)}</div>
+                    <div style={{ fontSize: 12.5, color: '#7C7090' }}>{m.email}</div>
                   </div>
-                  <span style={{ fontSize: 11.5, fontWeight: 700, padding: '4px 10px', borderRadius: 20, flex: 'none',
-                    ...(m.status === 'ativo' ? { color: '#1F7A50', background: '#E4F5EC' } : m.status === 'trial' ? { color: '#8A6716', background: '#FEF6E6' } : { color: '#B24A4A', background: '#FBEAEA' }) }}>
-                    {m.status}
-                  </span>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, padding: '4px 10px', borderRadius: 20, flex: 'none', ...(m.status === 'ativo' ? { color: '#1F7A50', background: '#E4F5EC' } : m.status === 'trial' ? { color: '#8A6716', background: '#FEF6E6' } : { color: '#B24A4A', background: '#FBEAEA' }) }}>{m.status}</span>
                 </div>
               ))}
             </div>
