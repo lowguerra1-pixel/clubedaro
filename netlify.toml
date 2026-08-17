@@ -1,4 +1,6 @@
-# Clube da Dra. Rô — site estático (protótipo v0)
+# Clube da Dra. Rô — app Next.js
 [build]
-  publish = "."
-  command = ""
+  command = "npm run build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
