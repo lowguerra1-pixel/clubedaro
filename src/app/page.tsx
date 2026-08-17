@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function Home() {
   return (
     <main style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 28, textAlign: 'center', background: 'linear-gradient(180deg,#F0E8FB 0%,#F7F4FC 60%)' }}>
@@ -8,9 +10,10 @@ export default function Home() {
       <p style={{ fontSize: 16, color: '#7C7090', margin: '12px 0 0', maxWidth: 320, lineHeight: 1.5 }}>
         Recursos terapêuticos toda semana, inspirações diárias e uma biblioteca clínica que só cresce.
       </p>
-      <span style={{ marginTop: 22, background: '#fff', borderRadius: 999, padding: '9px 16px', fontSize: 13.5, fontWeight: 600, color: '#6C3FB0', boxShadow: '0 6px 18px rgba(108,63,176,.1)' }}>
-        Em breve · 7 dias grátis 💜
-      </span>
+      <Link href="/entrar" style={{ marginTop: 26, background: '#6C3FB0', color: '#fff', fontWeight: 700, fontSize: 15.5, padding: '15px 34px', borderRadius: 16, textDecoration: 'none', boxShadow: '0 12px 26px rgba(108,63,176,.28)' }}>
+        Entrar
+      </Link>
+      <span style={{ marginTop: 14, fontSize: 12.5, color: '#9B95AC' }}>7 dias grátis 💜</span>
     </main>
   );
 }
