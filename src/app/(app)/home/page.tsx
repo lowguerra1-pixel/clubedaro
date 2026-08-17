@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getUser, getToken } from '@/lib/userStorage';
 import { fetchMateriais, abrirMaterial, catColor, type Mat } from '@/lib/material';
 import AtivarPush from '@/components/AtivarPush';
+import InspiracaoDia from '@/components/InspiracaoDia';
 
 export default function Home() {
   const [mats, setMats] = useState<Mat[]>([]);
@@ -43,6 +44,8 @@ export default function Home() {
           <span style={{ color: '#9163E0', fontWeight: 700, fontSize: 13, flex: 'none' }}>{enq.meuVoto === null ? 'Votar ›' : 'Ver ›'}</span>
         </Link>
       )}
+
+      <InspiracaoDia />
 
       {loading ? (
         <div style={{ color: '#9B95AC', fontSize: 14 }}>Carregando…</div>

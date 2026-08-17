@@ -1,0 +1,18 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7A4CC0"/>
+      <stop offset="1" stop-color="#4A2A80"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- acentos coloridos da paleta da marca -->
+  <circle cx="388" cy="150" r="26" fill="#F5806C"/>
+  <circle cx="420" cy="214" r="16" fill="#F7B733"/>
+  <circle cx="126" cy="372" r="18" fill="#17A39A"/>
+  <circle cx="150" cy="150" r="12" fill="#F7B733" opacity="0.9"/>
+  <!-- monograma Rô -->
+  <text x="50%" y="52%" text-anchor="middle" dominant-baseline="central"
+        font-family="'Baloo 2','Trebuchet MS',system-ui,sans-serif"
+        font-weight="700" font-size="270" fill="#F8EFD6">Rô</text>
+</svg>

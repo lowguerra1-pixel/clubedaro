@@ -1,5 +1,7 @@
 import MemberGuard from '@/components/MemberGuard';
 import BottomNav from '@/components/BottomNav';
+import WhatsAppButton from '@/components/WhatsAppButton';
+import Onboarding from '@/components/Onboarding';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -8,6 +10,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {children}
         <BottomNav />
       </div>
+      <WhatsAppButton />
+      <Onboarding />
     </MemberGuard>
   );
 }
