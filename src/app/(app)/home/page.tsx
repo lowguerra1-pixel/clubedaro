@@ -2,17 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getUser } from '@/lib/userStorage';
+import { getUser, getToken } from '@/lib/userStorage';
 import { fetchMateriais, abrirMaterial, catColor, type Mat } from '@/lib/material';
 
 export default function Home() {
   const [mats, setMats] = useState<Mat[]>([]);
   const [loading, setLoading] = useState(true);
   const [nome, setNome] = useState('');
+  const [enq, setEnq] = useState<{ id: string; pergunta: string; meuVoto: number | null } | null>(null);
 
   useEffect(() => {
     setNome(getUser()?.nome ?? '');
     fetchMateriais().then(m => { setMats(m); setLoading(false); });
+    fetch('/api/enquetes', { headers: { 'x-user-token': getToken() ?? '' } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.ativa) setEnq({ id: d.ativa.id, pergunta: d.ativa.pergunta, meuVoto: d.ativa.meuVoto }); })
+      .catch(() => {});
   }, []);
 
   const destaque = mats[0];
@@ -24,6 +29,17 @@ export default function Home() {
         <div style={{ fontSize: 12.5, color: '#7C7090', fontWeight: 500 }}>Olá,</div>
         <div className="serif" style={{ fontSize: 26, fontWeight: 700, color: '#6C3FB0' }}>{nome.split(' ')[0] || 'Bem-vinda'}</div>
       </div>
+
+      {enq && (
+        <Link href="/votar" style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#F0E8FB', border: '1px solid #E0D4F5', borderRadius: 16, padding: '13px 15px', marginBottom: 18, textDecoration: 'none' }}>
+          <span style={{ fontSize: 20 }}>🗳️</span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: '#4A2A80' }}>Enquete ativa</span>
+            <span style={{ display: 'block', fontSize: 12, color: '#6C3FB0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{enq.meuVoto === null ? 'Vote no tema do próximo mês' : 'Ver resultado parcial'}</span>
+          </span>
+          <span style={{ color: '#9163E0', fontWeight: 700, fontSize: 13, flex: 'none' }}>{enq.meuVoto === null ? 'Votar ›' : 'Ver ›'}</span>
+        </Link>
+      )}
 
       {loading ? (
         <div style={{ color: '#9B95AC', fontSize: 14 }}>Carregando…</div>

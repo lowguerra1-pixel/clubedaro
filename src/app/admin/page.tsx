@@ -9,6 +9,7 @@ interface Material {
 }
 interface Membro { id: string; email: string; nome: string | null; status: string; plano: string | null; iniciou_em: string; criado_em: string; }
 interface Tema { id: string; nome: string; inicio_em: string; }
+interface Enquete { id: string; pergunta: string; opcoes: string[]; publicar_em: string; encerrar_em: string; publicado: boolean; }
 
 const CATEGORIAS = ['Baralhos', 'Fichas', 'Áudios & Aulas', 'Protocolos'];
 const TIPOS = ['pdf', 'audio', 'video', 'link'];
@@ -21,6 +22,7 @@ const INPUT: React.CSSProperties = { width: '100%', padding: '11px 13px', border
 const IconMat = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3.4 8.4 4.2L12 11.8 3.6 7.6z"></path><path d="m3.6 12 8.4 4.2 8.4-4.2"></path><path d="m3.6 16.4 8.4 4.2 8.4-4.2"></path></svg>);
 const IconMemb = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="7.6" r="3.4"></circle><path d="M2.8 20.4v-1.3a4.6 4.6 0 0 1 4.6-4.6h3.2a4.6 4.6 0 0 1 4.6 4.6v1.3"></path><path d="M17 4.4a3.6 3.6 0 0 1 0 6.8"></path></svg>);
 const IconOut = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14.6 4.6h3.8a1.5 1.5 0 0 1 1.5 1.5v11.8a1.5 1.5 0 0 1-1.5 1.5h-3.8"></path><path d="m9.6 8.6-3.4 3.4 3.4 3.4"></path><path d="M6.4 12h9.2"></path></svg>);
+const IconEnq = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 20V11M12 20V5M19 20v-6"></path></svg>);
 
 function emptyForm() {
   return { titulo: '', descricao: '', categoria: CATEGORIAS[0], tipo: 'pdf', link_externo: '', tema_id: '', semana: '', dataManual: '', gratis: true, publicado: true };
@@ -32,7 +34,7 @@ export default function AdminClube() {
   const [authed, setAuthed] = useState(false);
   const [pwInput, setPwInput] = useState('');
   const [loginErr, setLoginErr] = useState('');
-  const [tab, setTab] = useState<'materiais' | 'assinantes'>('materiais');
+  const [tab, setTab] = useState<'materiais' | 'assinantes' | 'enquetes'>('materiais');
 
   const [list, setList] = useState<Material[]>([]);
   const [temas, setTemas] = useState<Tema[]>([]);
@@ -44,6 +46,8 @@ export default function AdminClube() {
 
   const [temaForm, setTemaForm] = useState({ nome: '', inicio_em: '' });
   const [membros, setMembros] = useState<Membro[]>([]);
+  const [enquetes, setEnquetes] = useState<Enquete[]>([]);
+  const [enqForm, setEnqForm] = useState({ pergunta: '', opcoes: '', publicar_em: '', encerrar_em: '' });
 
   const loadMateriais = useCallback(async (p: string) => {
     const res = await fetch('/api/admin/materiais', { headers: { 'x-admin-password': p } });
@@ -60,21 +64,49 @@ export default function AdminClube() {
     const res = await fetch('/api/admin/membros', { headers: { 'x-admin-password': p } });
     if (res.ok) { const d = await safeJson(res); setMembros(d.membros ?? []); }
   }, []);
+  const loadEnquetes = useCallback(async (p: string) => {
+    const res = await fetch('/api/admin/enquetes', { headers: { 'x-admin-password': p } });
+    if (res.ok) { const d = await safeJson(res); setEnquetes(d.enquetes ?? []); }
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem(PW_KEY);
     if (saved) {
       setPw(saved);
-      loadMateriais(saved).then(ok => { if (ok) { setAuthed(true); loadTemas(saved); loadMembros(saved); } });
+      loadMateriais(saved).then(ok => { if (ok) { setAuthed(true); loadTemas(saved); loadMembros(saved); loadEnquetes(saved); } });
     }
-  }, [loadMateriais, loadTemas, loadMembros]);
+  }, [loadMateriais, loadTemas, loadMembros, loadEnquetes]);
 
   const entrar = async () => {
     const p = pwInput.trim();
     if (!p) return;
     setPw(p);
     const ok = await loadMateriais(p);
-    if (ok) { localStorage.setItem(PW_KEY, p); setAuthed(true); setLoginErr(''); loadTemas(p); loadMembros(p); }
+    if (ok) { localStorage.setItem(PW_KEY, p); setAuthed(true); setLoginErr(''); loadTemas(p); loadMembros(p); loadEnquetes(p); }
+  };
+
+  const criarEnquete = async () => {
+    setErr(''); setMsg('');
+    const opcoes = enqForm.opcoes.split('\n').map(s => s.trim()).filter(Boolean);
+    if (!enqForm.pergunta.trim()) { setErr('Escreva a pergunta da enquete.'); return; }
+    if (opcoes.length < 2) { setErr('Adicione ao menos 2 opções (uma por linha).'); return; }
+    if (!enqForm.encerrar_em) { setErr('Defina quando a enquete encerra.'); return; }
+    const body = {
+      pergunta: enqForm.pergunta.trim(), opcoes,
+      publicar_em: enqForm.publicar_em ? new Date(enqForm.publicar_em).toISOString() : new Date().toISOString(),
+      encerrar_em: new Date(enqForm.encerrar_em).toISOString(),
+    };
+    const res = await fetch('/api/admin/enquetes', { method: 'POST', headers: { 'x-admin-password': pw, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await safeJson(res);
+    if (!res.ok) { setErr(d.error || 'Erro ao criar enquete'); return; }
+    setEnqForm({ pergunta: '', opcoes: '', publicar_em: '', encerrar_em: '' });
+    setMsg('Enquete criada! ✓');
+    loadEnquetes(pw);
+  };
+  const excluirEnquete = async (id: string) => {
+    if (!confirm('Excluir esta enquete? (os votos também são apagados)')) return;
+    await fetch(`/api/admin/enquetes/${id}`, { method: 'DELETE', headers: { 'x-admin-password': pw } });
+    loadEnquetes(pw);
   };
   const sair = () => { localStorage.removeItem(PW_KEY); setAuthed(false); setPwInput(''); };
 
@@ -159,7 +191,7 @@ export default function AdminClube() {
     );
   }
 
-  const navBtn = (id: 'materiais' | 'assinantes', label: string, Icon: () => React.ReactElement) => {
+  const navBtn = (id: 'materiais' | 'assinantes' | 'enquetes', label: string, Icon: () => React.ReactElement) => {
     const active = tab === id;
     return (
       <button onClick={() => setTab(id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, textAlign: 'left', background: active ? 'rgba(145,99,224,.22)' : 'transparent', color: active ? '#D9CBF5' : 'rgba(255,255,255,.6)' }}>
@@ -185,6 +217,7 @@ export default function AdminClube() {
         </div>
         <nav style={{ flex: 1, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
           {navBtn('materiais', 'Materiais', IconMat)}
+          {navBtn('enquetes', 'Enquetes', IconEnq)}
           {navBtn('assinantes', 'Assinantes', IconMemb)}
         </nav>
         <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,.08)' }}>
@@ -334,6 +367,49 @@ export default function AdminClube() {
                   <span style={{ fontSize: 11.5, fontWeight: 700, padding: '4px 10px', borderRadius: 20, flex: 'none', ...(m.status === 'ativo' ? { color: '#1F7A50', background: '#E4F5EC' } : m.status === 'trial' ? { color: '#8A6716', background: '#FEF6E6' } : { color: '#B24A4A', background: '#FBEAEA' }) }}>{m.status}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {tab === 'enquetes' && (
+          <div style={{ maxWidth: 680 }}>
+            <h1 className="serif" style={{ fontSize: 26, fontWeight: 700, color: '#4A2A80', margin: '0 0 4px' }}>Enquetes</h1>
+            <p style={{ fontSize: 14, color: '#7C7090', margin: '0 0 22px' }}>Crie a votação do tema e agende quando abre e encerra. O assinante vê um aviso na tela inicial.</p>
+
+            <div style={{ ...CARD, marginBottom: 26 }}>
+              <div className="serif" style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Nova enquete</div>
+              <div style={{ display: 'grid', gap: 14 }}>
+                <div><label style={LABEL}>Pergunta</label><input value={enqForm.pergunta} onChange={e => setEnqForm({ ...enqForm, pergunta: e.target.value })} placeholder="Qual tema você quer no próximo mês?" style={INPUT} /></div>
+                <div><label style={LABEL}>Opções (uma por linha)</label><textarea value={enqForm.opcoes} onChange={e => setEnqForm({ ...enqForm, opcoes: e.target.value })} rows={4} placeholder={'Regulação e Nervo Vago\nAnsiedade\nLuto\nCriança e TEA'} style={{ ...INPUT, resize: 'vertical' }} /></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div><label style={LABEL}>Abrir em</label><input type="datetime-local" value={enqForm.publicar_em} onChange={e => setEnqForm({ ...enqForm, publicar_em: e.target.value })} style={INPUT} /><div style={{ fontSize: 12, color: '#9B95AC', marginTop: 4 }}>Vazio = agora.</div></div>
+                  <div><label style={LABEL}>Encerrar em</label><input type="datetime-local" value={enqForm.encerrar_em} onChange={e => setEnqForm({ ...enqForm, encerrar_em: e.target.value })} style={INPUT} /></div>
+                </div>
+                {err && <p style={{ color: '#C0392B', fontSize: 13, margin: 0 }}>{err}</p>}
+                {msg && <p style={{ color: '#1F7A50', fontSize: 13, margin: 0 }}>{msg}</p>}
+                <button onClick={criarEnquete} style={{ border: 'none', background: '#6C3FB0', color: '#fff', fontWeight: 700, fontSize: 15, padding: 14, borderRadius: 14, cursor: 'pointer' }}>Criar enquete</button>
+              </div>
+            </div>
+
+            <div className="serif" style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Enquetes ({enquetes.length})</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {enquetes.length === 0 && <div style={{ ...CARD, color: '#7C7090', fontSize: 14 }}>Nenhuma enquete ainda.</div>}
+              {enquetes.map(e => {
+                const now = Date.now();
+                const st = new Date(e.publicar_em).getTime() > now ? { t: 'Agendada', c: '#8A6716', b: '#FEF6E6' } : new Date(e.encerrar_em).getTime() > now ? { t: 'Ativa', c: '#1F7A50', b: '#E4F5EC' } : { t: 'Encerrada', c: '#7C7090', b: '#F1EDF6' };
+                return (
+                  <div key={e.id} style={{ ...CARD, display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: 15 }}>{e.pergunta}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: st.c, background: st.b, padding: '2px 8px', borderRadius: 20 }}>{st.t}</span>
+                      </div>
+                      <div style={{ fontSize: 12.5, color: '#7C7090', marginTop: 3 }}>{e.opcoes.length} opções · encerra {fmt(e.encerrar_em)}</div>
+                    </div>
+                    <button onClick={() => excluirEnquete(e.id)} style={{ border: '1.5px solid #F3C7C1', background: '#FFF6F4', color: '#C0392B', fontSize: 12.5, fontWeight: 700, padding: '8px 12px', borderRadius: 12, cursor: 'pointer', flex: 'none' }}>Excluir</button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
