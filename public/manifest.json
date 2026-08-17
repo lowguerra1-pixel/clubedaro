@@ -1,0 +1,10 @@
+{
+  "name": "Clube da Dra. Rô",
+  "short_name": "Clube Rô",
+  "description": "Recursos terapêuticos toda semana — o clube da Dra. Rô.",
+  "start_url": "/home",
+  "display": "standalone",
+  "background_color": "#F7F4FC",
+  "theme_color": "#6C3FB0",
+  "lang": "pt-BR"
+}

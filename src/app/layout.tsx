@@ -4,6 +4,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Clube da Dra. Rô",
   description: "Recursos terapêuticos toda semana — o clube da Dra. Rô.",
+  manifest: "/manifest.json",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Clube da Dra. Rô" },
 };
 
 export const viewport: Viewport = {

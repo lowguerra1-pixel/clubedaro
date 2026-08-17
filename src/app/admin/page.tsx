@@ -23,6 +23,7 @@ const IconMat = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="non
 const IconMemb = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="7.6" r="3.4"></circle><path d="M2.8 20.4v-1.3a4.6 4.6 0 0 1 4.6-4.6h3.2a4.6 4.6 0 0 1 4.6 4.6v1.3"></path><path d="M17 4.4a3.6 3.6 0 0 1 0 6.8"></path></svg>);
 const IconOut = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14.6 4.6h3.8a1.5 1.5 0 0 1 1.5 1.5v11.8a1.5 1.5 0 0 1-1.5 1.5h-3.8"></path><path d="m9.6 8.6-3.4 3.4 3.4 3.4"></path><path d="M6.4 12h9.2"></path></svg>);
 const IconEnq = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 20V11M12 20V5M19 20v-6"></path></svg>);
+const IconBell = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8.6a6 6 0 1 0-12 0c0 4.9-2 6.4-2 6.4h16s-2-1.5-2-6.4"></path><path d="M13.7 19a2 2 0 0 1-3.4 0"></path></svg>);
 
 function emptyForm() {
   return { titulo: '', descricao: '', categoria: CATEGORIAS[0], tipo: 'pdf', link_externo: '', tema_id: '', semana: '', dataManual: '', gratis: true, publicado: true };
@@ -34,7 +35,7 @@ export default function AdminClube() {
   const [authed, setAuthed] = useState(false);
   const [pwInput, setPwInput] = useState('');
   const [loginErr, setLoginErr] = useState('');
-  const [tab, setTab] = useState<'materiais' | 'assinantes' | 'enquetes'>('materiais');
+  const [tab, setTab] = useState<'materiais' | 'assinantes' | 'enquetes' | 'notificacoes'>('materiais');
 
   const [list, setList] = useState<Material[]>([]);
   const [temas, setTemas] = useState<Tema[]>([]);
@@ -48,6 +49,8 @@ export default function AdminClube() {
   const [membros, setMembros] = useState<Membro[]>([]);
   const [enquetes, setEnquetes] = useState<Enquete[]>([]);
   const [enqForm, setEnqForm] = useState({ pergunta: '', opcoes: '', publicar_em: '', encerrar_em: '' });
+  const [notif, setNotif] = useState({ titulo: '', corpo: '' });
+  const [notifRes, setNotifRes] = useState('');
 
   const loadMateriais = useCallback(async (p: string) => {
     const res = await fetch('/api/admin/materiais', { headers: { 'x-admin-password': p } });
@@ -107,6 +110,16 @@ export default function AdminClube() {
     if (!confirm('Excluir esta enquete? (os votos também são apagados)')) return;
     await fetch(`/api/admin/enquetes/${id}`, { method: 'DELETE', headers: { 'x-admin-password': pw } });
     loadEnquetes(pw);
+  };
+  const enviarNotif = async () => {
+    setNotifRes('');
+    if (!notif.titulo.trim()) { setNotifRes('Escreva o título.'); return; }
+    if (!confirm('Enviar esta notificação para todos os assinantes?')) return;
+    const res = await fetch('/api/admin/notificar', { method: 'POST', headers: { 'x-admin-password': pw, 'Content-Type': 'application/json' }, body: JSON.stringify(notif) });
+    const d = await safeJson(res);
+    if (!res.ok) { setNotifRes(d.error || 'Erro ao enviar'); return; }
+    setNotifRes(`✓ Enviado para ${d.enviados} de ${d.total} aparelho(s).`);
+    setNotif({ titulo: '', corpo: '' });
   };
   const sair = () => { localStorage.removeItem(PW_KEY); setAuthed(false); setPwInput(''); };
 
@@ -191,7 +204,7 @@ export default function AdminClube() {
     );
   }
 
-  const navBtn = (id: 'materiais' | 'assinantes' | 'enquetes', label: string, Icon: () => React.ReactElement) => {
+  const navBtn = (id: 'materiais' | 'assinantes' | 'enquetes' | 'notificacoes', label: string, Icon: () => React.ReactElement) => {
     const active = tab === id;
     return (
       <button onClick={() => setTab(id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, textAlign: 'left', background: active ? 'rgba(145,99,224,.22)' : 'transparent', color: active ? '#D9CBF5' : 'rgba(255,255,255,.6)' }}>
@@ -218,6 +231,7 @@ export default function AdminClube() {
         <nav style={{ flex: 1, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
           {navBtn('materiais', 'Materiais', IconMat)}
           {navBtn('enquetes', 'Enquetes', IconEnq)}
+          {navBtn('notificacoes', 'Notificações', IconBell)}
           {navBtn('assinantes', 'Assinantes', IconMemb)}
         </nav>
         <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,.08)' }}>
@@ -411,6 +425,22 @@ export default function AdminClube() {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {tab === 'notificacoes' && (
+          <div style={{ maxWidth: 540 }}>
+            <h1 className="serif" style={{ fontSize: 26, fontWeight: 700, color: '#4A2A80', margin: '0 0 4px' }}>Notificações</h1>
+            <p style={{ fontSize: 14, color: '#7C7090', margin: '0 0 22px' }}>Envie um aviso no celular de todos os assinantes que ativaram as notificações.</p>
+            <div style={{ ...CARD }}>
+              <div style={{ display: 'grid', gap: 14 }}>
+                <div><label style={LABEL}>Título</label><input value={notif.titulo} onChange={e => setNotif({ ...notif, titulo: e.target.value })} placeholder="Ex.: Novo material no ar! 💜" style={INPUT} /></div>
+                <div><label style={LABEL}>Mensagem</label><textarea value={notif.corpo} onChange={e => setNotif({ ...notif, corpo: e.target.value })} rows={3} placeholder="Ex.: O baralho da Semana 2 já está na sua biblioteca." style={{ ...INPUT, resize: 'vertical' }} /></div>
+                {notifRes && <p style={{ fontSize: 13, margin: 0, color: notifRes.startsWith('✓') ? '#1F7A50' : '#C0392B' }}>{notifRes}</p>}
+                <button onClick={enviarNotif} style={{ border: 'none', background: '#6C3FB0', color: '#fff', fontWeight: 700, fontSize: 15, padding: 14, borderRadius: 14, cursor: 'pointer' }}>Enviar notificação</button>
+              </div>
+            </div>
+            <p style={{ fontSize: 12.5, color: '#9B95AC', marginTop: 14, lineHeight: 1.5 }}>Só recebe quem ativou as notificações no celular. O assinante ativa pelo aviso 🔔 na tela inicial dele.</p>
           </div>
         )}
       </main>

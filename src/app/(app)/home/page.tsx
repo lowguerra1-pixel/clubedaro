@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getUser, getToken } from '@/lib/userStorage';
 import { fetchMateriais, abrirMaterial, catColor, type Mat } from '@/lib/material';
+import AtivarPush from '@/components/AtivarPush';
 
 export default function Home() {
   const [mats, setMats] = useState<Mat[]>([]);
@@ -29,6 +30,8 @@ export default function Home() {
         <div style={{ fontSize: 12.5, color: '#7C7090', fontWeight: 500 }}>Olá,</div>
         <div className="serif" style={{ fontSize: 26, fontWeight: 700, color: '#6C3FB0' }}>{nome.split(' ')[0] || 'Bem-vinda'}</div>
       </div>
+
+      <AtivarPush />
 
       {enq && (
         <Link href="/votar" style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#F0E8FB', border: '1px solid #E0D4F5', borderRadius: 16, padding: '13px 15px', marginBottom: 18, textDecoration: 'none' }}>
